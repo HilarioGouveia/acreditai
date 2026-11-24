@@ -18,7 +18,6 @@ class ChatRequest(BaseModel):
 
 class DecisaoAprovacaoRequest(BaseModel):
     decisao: Literal["aprovar", "rejeitar"]
-    aprovador: str = Field(default="Supervisor CS", min_length=2, max_length=80)
     empresa_id: Optional[int] = Field(
         default=None,
         gt=0,

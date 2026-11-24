@@ -38,9 +38,9 @@ def _get(path: str):
         return None
 
 
-def _post(path: str, payload: dict):
+def _post(path: str, payload: dict, token: str = ""):
     try:
-        r = httpx.post(f"{API_URL}{path}", json=payload, timeout=20.0)
+        r = httpx.post(f"{API_URL}{path}", json=payload, headers={"Authorization": f"Bearer {token}"} if token else {}, timeout=20.0)
         r.raise_for_status()
         return r.json()
     except Exception as exc:
@@ -131,6 +131,7 @@ if pagina == "💬 Assistente":
             )
 
 elif pagina.startswith("✅ Aprovações"):
+    token_aprovador = st.text_input("Token do aprovador", type="password")
     st.subheader(f"Centro de Aprovações e Desambiguação ({qtd_pendentes})")
     pendentes = pendentes_data.get("pendentes", [])
     if not pendentes:
@@ -154,14 +155,15 @@ elif pagina.startswith("✅ Aprovações"):
                 escolha = st.radio("Selecione a empresa correta:", list(opcoes.keys()), key=f"rad_{exec_id}")
                 c1, c2 = st.columns(2)
                 if c1.button("Confirmar Seleção", key=f"conf_{exec_id}", type="primary"):
-                    _post(
+                    if _post(
                         f"/agent/aprovacoes/{exec_id}/decidir",
-                        {"decisao": "aprovar", "aprovador": solicitante, "empresa_id": opcoes[escolha]},
-                    )
-                    st.rerun()
+                        {"decisao": "aprovar", "empresa_id": opcoes[escolha]},
+                        token_aprovador,
+                    ):
+                        st.rerun()
                 if c2.button("Rejeitar", key=f"rej_{exec_id}"):
-                    _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "rejeitar", "aprovador": solicitante})
-                    st.rerun()
+                    if _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "rejeitar"}, token_aprovador):
+                        st.rerun()
             else:
                 emp = resp.get("empresa") or {}
                 ass = resp.get("assinatura") or {}
@@ -177,11 +179,11 @@ elif pagina.startswith("✅ Aprovações"):
                 st.caption(f"Plano: {ass.get('plano')} | Assinatura ID: {ass.get('assinatura_id')} | Status: {ass.get('status')}")
                 c1, c2 = st.columns(2)
                 if c1.button("Aprovar Inclusão", key=f"apr_{exec_id}", type="primary"):
-                    _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "aprovar", "aprovador": solicitante})
-                    st.rerun()
+                    if _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "aprovar"}, token_aprovador):
+                        st.rerun()
                 if c2.button("Rejeitar", key=f"rej_{exec_id}"):
-                    _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "rejeitar", "aprovador": solicitante})
-                    st.rerun()
+                    if _post(f"/agent/aprovacoes/{exec_id}/decidir", {"decisao": "rejeitar"}, token_aprovador):
+                        st.rerun()
 
 elif pagina == "📋 Histórico":
     st.subheader("Histórico de Operações")

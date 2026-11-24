@@ -65,8 +65,9 @@ def interpretar_solicitacao(state: AgentState) -> dict:
             "trilha_auditoria": _auditar(state, "Interpretar Solicitação", "bloqueado", motivo),
         }
 
-    if not resultado.empresa_nome and not state.get("empresa_id"):
-        motivo = "Não foi possível identificar o nome fantasia da empresa na solicitação."
+    empresa_nome = (resultado.empresa_nome or "").strip()
+    if not 2 <= len(empresa_nome) <= 120:
+        motivo = "Informe um nome fantasia válido (de 2 a 120 caracteres)."
         return {
             "iteracoes": iteracoes,
             "intencao": resultado.intencao,
@@ -82,7 +83,7 @@ def interpretar_solicitacao(state: AgentState) -> dict:
     return {
         "iteracoes": iteracoes,
         "intencao": resultado.intencao,
-        "empresa_nome": resultado.empresa_nome,
+        "empresa_nome": empresa_nome,
         "creditos_solicitados": resultado.creditos_solicitados,
         "trilha_auditoria": _auditar(state, "Interpretar Solicitação", "sucesso", detalhe),
     }
@@ -93,18 +94,6 @@ def buscar_empresa_node(state: AgentState) -> dict:
         return {"status_operacao": "erro", "motivo": "Limite máximo de iterações atingido."}
 
     iteracoes = state.get("iteracoes", 0) + 1
-
-    # Caso o analista já tenha escolhido explicitamente o empresa_id na desambiguação
-    if state.get("empresa_id"):
-        return {
-            "iteracoes": iteracoes,
-            "trilha_auditoria": _auditar(
-                state,
-                "Buscar Empresa",
-                "sucesso",
-                f"Empresa pré-selecionada confirmada (ID: {state['empresa_id']}).",
-            ),
-        }
 
     nome = state.get("empresa_nome") or ""
     resp = buscar_empresa.invoke({"nome": nome})
@@ -127,6 +116,19 @@ def buscar_empresa_node(state: AgentState) -> dict:
             "motivo": motivo,
             "trilha_auditoria": _auditar(state, "Buscar Empresa", "erro", motivo),
         }
+
+    empresa_id = state.get("empresa_id")
+    if empresa_id is not None:
+        selecionadas = [empresa for empresa in empresas if (empresa.get("id") or empresa.get("empresa_id")) == empresa_id]
+        if not selecionadas:
+            motivo = "A empresa selecionada não faz parte dos resultados da busca."
+            return {
+                "iteracoes": iteracoes,
+                "status_operacao": "erro",
+                "motivo": motivo,
+                "trilha_auditoria": _auditar(state, "Buscar Empresa", "bloqueado", motivo),
+            }
+        empresas = selecionadas
 
     if len(empresas) > 1:
         motivo = f"Foram encontradas {len(empresas)} empresas para '{nome}'. Selecione qual deseja utilizar."
@@ -170,11 +172,21 @@ def consultar_assinatura_node(state: AgentState) -> dict:
             "trilha_auditoria": _auditar(state, "Consultar Assinatura", "erro", motivo),
         }
 
-    ass = resp["assinatura"]
-    ass_id = ass.get("assinatura_id") or ass.get("id")
+    assinaturas = resp["assinatura"]
+    if len(assinaturas) != 1:
+        motivo = "A empresa tem mais de uma assinatura. A operação exige uma assinatura inequívoca."
+        return {
+            "iteracoes": iteracoes,
+            "status_operacao": "erro",
+            "motivo": motivo,
+            "trilha_auditoria": _auditar(state, "Consultar Assinatura", "alerta", motivo),
+        }
+
+    ass = assinaturas[0]
+    ass_id = ass["id"]
     plano = ass.get("plano", "Padrão")
     status = str(ass.get("status", "")).upper()
-    saldo = int(ass.get("saldo_creditos", ass.get("saldo", 0)))
+    saldo = ass["saldo_creditos_api"]
 
     novo_status_op = "concluido" if state.get("intencao") == "consultar" else state["status_operacao"]
 
@@ -260,7 +272,11 @@ def incluir_creditos_node(state: AgentState) -> dict:
     ass_id = state["assinatura_id"]
     qtd = state["creditos_solicitados"]
 
-    resp = incluir_creditos.invoke({"assinatura_id": ass_id, "quantidade": qtd})
+    resp = incluir_creditos.invoke({
+        "assinatura_id": ass_id,
+        "quantidade": qtd,
+        "motivo": f"Solicitação de créditos CS, execução {state['execucao_id']}",
+    })
 
     if not resp.get("ok"):
         motivo = resp.get("erro", "Falha ao incluir créditos na API SaaS.")
@@ -272,8 +288,7 @@ def incluir_creditos_node(state: AgentState) -> dict:
         }
 
     resultado = resp.get("resultado") or {}
-    saldo_anterior = state.get("saldo_atual") or 0
-    saldo_final = resultado.get("saldo_creditos") or resultado.get("saldo_final") or (saldo_anterior + qtd)
+    saldo_final = resultado["saldo_creditos_api"]
 
     return {
         "iteracoes": iteracoes,

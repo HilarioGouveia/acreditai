@@ -5,11 +5,11 @@ from acreditai.tools.saas_client import SaasAPIError, SaasClient
 
 
 @tool(args_schema=IncluirCreditosInput)
-def incluir_creditos(assinatura_id: int, quantidade: int) -> dict[str, Any]:
+def incluir_creditos(assinatura_id: int, quantidade: int, motivo: str) -> dict[str, Any]:
     """Inclui créditos extras de API (entre 1 e 3000) em uma assinatura ativa."""
     client = SaasClient()
     try:
-        resultado = client.incluir_creditos(assinatura_id=assinatura_id, quantidade=quantidade)
+        resultado = client.incluir_creditos(assinatura_id=assinatura_id, quantidade=quantidade, motivo=motivo)
         return {"ok": True, "resultado": resultado}
     except SaasAPIError as err:
         return {"ok": False, "status_code": err.status_code, "erro": err.message, "resultado": None}

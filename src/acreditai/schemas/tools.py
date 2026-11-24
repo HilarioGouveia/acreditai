@@ -19,6 +19,7 @@ class ConsultarAssinaturaInput(BaseModel):
 
 
 class IncluirCreditosInput(BaseModel):
+    motivo: str = Field(..., min_length=3)
     assinatura_id: int = Field(
         ...,
         gt=0,
