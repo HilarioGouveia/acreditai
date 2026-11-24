@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from secrets import compare_digest
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from langchain_core.messages import HumanMessage
 
 from acreditai.agent.graph import agent_graph
@@ -80,8 +82,29 @@ def listar_aprovacoes():
     return {"pendentes": repo.listar_pendentes()}
 
 
+bearer_aprovador = HTTPBearer(auto_error=False)
+
+
+def identificar_aprovador(
+    credencial: HTTPAuthorizationCredentials | None = Depends(bearer_aprovador),
+) -> str:
+    if credencial:
+        for nome, token in settings.acreditai_aprovadores.items():
+            if token and compare_digest(token.encode(), credencial.credentials.encode()):
+                return nome
+    raise HTTPException(
+        status_code=401,
+        detail="Credencial de aprovador inválida.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @app.post("/agent/aprovacoes/{execucao_id}/decidir", response_model=AgentResponse)
-def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
+def decidir_aprovacao(
+    execucao_id: str,
+    payload: DecisaoAprovacaoRequest,
+    aprovador: str = Depends(identificar_aprovador),
+):
     registro = repo.obter_execucao(execucao_id)
     if not registro:
         raise HTTPException(status_code=404, detail="Execução não encontrada.")
@@ -95,7 +118,7 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
 
     if payload.decisao == "rejeitar":
         state["status_operacao"] = "rejeitado"
-        state["motivo"] = f"Operação rejeitada por {payload.aprovador}."
+        state["motivo"] = f"Operação rejeitada por {aprovador}."
         state["trilha_auditoria"].append(
             {
                 "etapa": "Decisão Humana (HITL)",
@@ -111,7 +134,7 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
             prompt_original=registro["prompt_original"],
             state=state,
             resposta=resposta,
-            aprovador=payload.aprovador,
+            aprovador=aprovador,
         )
         return resposta
 
@@ -127,6 +150,8 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
             ),
             None,
         )
+        if candidata is None:
+            raise HTTPException(status_code=422, detail="Selecione uma das empresas candidatas.")
         state["empresa_id"] = payload.empresa_id
         state["empresa_confirmada"] = (
             (candidata.get("nome") or candidata.get("nome_fantasia")) if candidata else state.get("empresa_nome")
@@ -136,15 +161,14 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
             {
                 "etapa": "Desambiguação Humana",
                 "status": "sucesso",
-                "detalhe": f"Empresa ID {payload.empresa_id} confirmada por {payload.aprovador}.",
+                "detalhe": f"Empresa ID {payload.empresa_id} confirmada por {aprovador}.",
                 "timestamp": agora,
             }
         )
         state.update(consultar_assinatura_node(state))
         if state["status_operacao"] not in ("erro", "concluido"):
-            state["exigir_aprovacao"] = False
             state.update(validar_regras_node(state))
-            if state["status_operacao"] not in ("negado", "erro"):
+            if state["status_operacao"] == "em_andamento":
                 state.update(incluir_creditos_node(state))
     else:
         state["status_operacao"] = "aprovado"
@@ -152,7 +176,7 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
             {
                 "etapa": "Aprovação Humana (HITL)",
                 "status": "sucesso",
-                "detalhe": f"Aprovado por {payload.aprovador}.",
+                "detalhe": f"Aprovado por {aprovador}.",
                 "timestamp": agora,
             }
         )
@@ -165,7 +189,7 @@ def decidir_aprovacao(execucao_id: str, payload: DecisaoAprovacaoRequest):
         prompt_original=registro["prompt_original"],
         state=state,
         resposta=resposta,
-        aprovador=payload.aprovador,
+        aprovador=aprovador,
     )
     return resposta
 

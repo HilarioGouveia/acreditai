@@ -1,0 +1,526 @@
+/* =====================================================
+   ACreditAi Design System
+   Dark Enterprise Theme
+   ===================================================== */
+
+:root {
+
+    /* Brand */
+    --agent-blue: #2563EB;
+    --agent-cyan: #38BDF8;
+    --agent-light: #7DD3FC;
+
+    /* Status */
+    --success: #22C55E;
+    --warning: #F59E0B;
+    --danger: #EF4444;
+    --purple: #8B5CF6;
+
+    /* Backgrounds */
+    --bg-primary: #07111F;
+    --bg-secondary: #0F172A;
+    --bg-card: #111C31;
+    --bg-code: #0B1220;
+
+    /* Text */
+    --text-primary: #F8FAFC;
+    --text-secondary: #CBD5E1;
+    --text-muted: #94A3B8;
+
+    /* Borders */
+    --border: #1E3A5F;
+
+    /* Effects */
+    --glow-blue: rgba(56,189,248,.25);
+    --glow-green: rgba(34,197,94,.25);
+    --glow-red: rgba(239,68,68,.25);
+
+    --radius: 18px;
+
+}
+
+/* =====================================================
+   STREAMLIT BASE
+   ===================================================== */
+
+/* Cabeçalho transparente */
+
+header[data-testid="stHeader"] {
+    background: transparent;
+}
+
+/* Sidebar */
+
+section[data-testid="stSidebar"] {
+    background: #081425;
+    border-right: 1px solid var(--border);
+}
+
+[data-testid="stSidebar"] [data-testid="stPageLink-NavLink"] [data-testid="stIconMaterial"] {
+    font-size: 20px;
+}
+
+.ac-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    margin: 0;
+    padding: 0;
+}
+
+.ac-sidebar-symbol {
+    flex: 0 0 36px;
+    width: 36px;
+    height: 25px;
+    object-fit: cover;
+}
+
+.st-key-sidebar-nav-active [data-testid="stIconMaterial"] {
+    color: var(--agent-cyan);
+}
+
+.st-key-estado-vazio {
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+}
+
+.st-key-estado-vazio p {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.st-key-estado-vazio [data-testid="stIconMaterial"] {
+    flex-shrink: 0;
+    color: var(--agent-cyan);
+    font-size: 20px;
+}
+
+/* =====================================================
+   LOGO / BRAND
+   ===================================================== */
+
+.ac-brand {
+    margin-bottom: 30px;
+}
+
+.ac-brand h1 {
+    font-size: 56px;
+    font-weight: 800;
+    margin-bottom: 0;
+    line-height: 1;
+}
+
+.ac-agent {
+    background: linear-gradient(
+        135deg,
+        var(--agent-blue),
+        var(--agent-cyan)
+    );
+
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.ac-credit {
+    color: white;
+}
+
+.ac-ai {
+    color: var(--agent-light);
+}
+
+.ac-subtitle {
+    color: var(--text-muted);
+    font-size: 20px;
+    margin-top: 10px;
+}
+
+/* =====================================================
+   HERO
+   ===================================================== */
+
+.ac-hero {
+
+    padding: 28px;
+
+    margin-bottom: 25px;
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(37,99,235,.18),
+            rgba(56,189,248,.05)
+        );
+
+    border: 1px solid rgba(56,189,248,.30);
+
+    border-radius: 24px;
+
+    box-shadow:
+        0 0 25px rgba(56,189,248,.12);
+}
+
+.ac-hero-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.ac-hero-text {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+/* =====================================================
+   CARDS
+   ===================================================== */
+
+.ac-card {
+
+    background: var(--bg-card);
+
+    border: 1px solid rgba(56,189,248,.15);
+
+    border-radius: var(--radius);
+
+    padding: 22px;
+
+    transition: .25s;
+
+    margin-bottom: 16px;
+
+    box-shadow:
+        0 6px 20px rgba(0,0,0,.25);
+}
+
+.ac-card:hover {
+
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 0 20px rgba(56,189,248,.10),
+        0 0 40px rgba(56,189,248,.05);
+}
+
+.ac-card h3 {
+    margin-top: 0;
+    color: white;
+}
+
+.ac-card p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.ac-context h3 {
+    color: var(--agent-light);
+    font-size: 1rem;
+}
+
+.ac-context dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 12px;
+    margin: 0;
+}
+
+.ac-context dt {
+    color: var(--text-secondary);
+}
+
+.ac-context dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+/* =====================================================
+   GLOW CARDS
+   ===================================================== */
+
+.glow-blue {
+
+    border: 1px solid var(--agent-cyan);
+
+    box-shadow:
+        0 0 10px var(--glow-blue),
+        0 0 30px rgba(56,189,248,.08);
+}
+
+.glow-green {
+
+    border: 1px solid var(--success);
+
+    box-shadow:
+        0 0 10px var(--glow-green);
+}
+
+.glow-red {
+
+    border: 1px solid var(--danger);
+
+    box-shadow:
+        0 0 10px var(--glow-red);
+}
+
+/* =====================================================
+   METRICS
+   ===================================================== */
+
+.metric-card {
+
+    background: var(--bg-card);
+
+    border-radius: 18px;
+
+    padding: 20px;
+
+    text-align: center;
+
+    border: 1px solid rgba(56,189,248,.15);
+}
+
+.metric-value {
+
+    font-size: 38px;
+
+    font-weight: 700;
+
+    color: var(--agent-cyan);
+}
+
+.metric-label {
+
+    color: var(--text-muted);
+
+    font-size: 14px;
+
+    letter-spacing: 1px;
+
+    text-transform: uppercase;
+}
+
+/* =====================================================
+   BADGES
+   ===================================================== */
+
+.badge {
+
+    display: inline-block;
+
+    padding: 8px 16px;
+
+    margin: 4px;
+
+    border-radius: 999px;
+
+    font-size: 12px;
+
+    font-weight: 600;
+
+    letter-spacing: .5px;
+}
+
+.badge-blue {
+    background: rgba(56,189,248,.15);
+    color: var(--agent-cyan);
+}
+
+.badge-green {
+    background: rgba(34,197,94,.15);
+    color: var(--success);
+}
+
+.badge-red {
+    background: rgba(239,68,68,.15);
+    color: var(--danger);
+}
+
+.badge-orange {
+    background: rgba(245,158,11,.15);
+    color: var(--warning);
+}
+
+.badge-purple {
+    background: rgba(139,92,246,.15);
+    color: var(--purple);
+}
+
+/* =====================================================
+   STATUS WORKFLOW
+   ===================================================== */
+
+.flow-step {
+
+    padding: 14px 18px;
+
+    border-radius: 14px;
+
+    margin-bottom: 8px;
+
+    font-weight: 600;
+}
+
+.step-intent {
+    background: rgba(139,92,246,.15);
+    color: #C4B5FD;
+}
+
+.step-company {
+    background: rgba(59,130,246,.15);
+    color: #93C5FD;
+}
+
+.step-subscription {
+    background: rgba(245,158,11,.15);
+    color: #FCD34D;
+}
+
+.step-rules {
+    background: rgba(239,68,68,.15);
+    color: #FCA5A5;
+}
+
+.step-credit {
+    background: rgba(34,197,94,.15);
+    color: #86EFAC;
+}
+
+.step-response {
+    background: rgba(56,189,248,.15);
+    color: #7DD3FC;
+}
+
+/* =====================================================
+   CODE / AGENT STATE
+   ===================================================== */
+
+.agent-state {
+
+    background: var(--bg-code);
+
+    border-radius: 18px;
+
+    border: 1px solid #1E293B;
+
+    padding: 20px;
+
+    font-family:
+        Consolas,
+        Monaco,
+        monospace;
+
+    overflow-x: auto;
+}
+
+.agent-state pre {
+    color: #E2E8F0;
+}
+
+/* =====================================================
+   TABLES
+   ===================================================== */
+
+[data-testid="stDataFrame"] {
+
+    border-radius: 18px;
+
+    overflow: hidden;
+
+    border: 1px solid var(--border);
+}
+
+/* =====================================================
+   AUDITORIA
+   ===================================================== */
+
+.audit-panel {
+
+    background: var(--bg-card);
+
+    padding: 20px;
+
+    border-radius: 18px;
+
+    border-left: 4px solid var(--agent-cyan);
+}
+
+.audit-panel h3 {
+    margin-top: 0;
+}
+
+/* =====================================================
+   HUMAN IN THE LOOP
+   ===================================================== */
+
+.hitl {
+
+    background:
+        linear-gradient(
+            135deg,
+            rgba(245,158,11,.15),
+            rgba(239,68,68,.07)
+        );
+
+    border: 1px solid rgba(245,158,11,.35);
+
+    border-radius: 20px;
+
+    padding: 20px;
+
+    margin: 10px 0;
+}
+
+.hitl-title {
+
+    font-size: 18px;
+
+    font-weight: 700;
+
+    color: #FCD34D;
+}
+
+/* =====================================================
+   FOOTER
+   ===================================================== */
+
+.ac-footer {
+
+    margin-top: 40px;
+
+    padding-top: 24px;
+
+    border-top: 1px solid var(--border);
+
+    color: var(--text-muted);
+
+    text-align: center;
+
+    font-size: 14px;
+}
+
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #081425;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1E40AF;
+    border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--agent-cyan);
+}
