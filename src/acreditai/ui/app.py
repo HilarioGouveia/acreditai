@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import streamlit as st
 
-API_URL = os.getenv("ACREDITAI_API_URL", "http://localhost:8000")
+API_URL = os.getenv("ACREDITAI_API_URL", "http://127.0.0.1:8010")
 MODO_DEMO = os.getenv("ACREDITAI_MODE", "").strip().lower() == "demo"
 LOGGER = logging.getLogger("acreditai.demo")
 ASSETS_DIR = Path(__file__).resolve().parents[3] / "assets"
@@ -24,8 +24,14 @@ MARCA_SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -5.5 36 36" w
            href="data:image/jpeg;base64,{MARCA_JPEG}"/>
 </svg>"""
 MARCA_URL = "data:image/svg+xml;base64," + b64encode(MARCA_SVG.encode("utf-8")).decode("ascii")
+AVATARES_CHAT = {"assistant": MARCA_URL, "user": ":material/person:"}
 
-st.set_page_config(page_title="ACreditAi Copilot", page_icon=MARCA_URL, layout="wide")
+st.set_page_config(
+    page_title="ACreditAi Copilot",
+    page_icon=MARCA_URL,
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
 
 st.html(ASSETS_DIR / "estilos.css")
 
@@ -73,6 +79,24 @@ def _get(path: str):
         return None
 
 
+def atualizar_resultado(resultado):
+    execucao_id = resultado.get("execucao_id")
+    if not execucao_id:
+        return
+    ultimo = st.session_state.ultimo_resultado
+    texto_anterior = None
+    if ultimo and ultimo.get("execucao_id") == execucao_id:
+        texto_anterior = texto_resultado(ultimo)
+        st.session_state.ultimo_resultado = resultado
+    for mensagem in st.session_state.messages:
+        if mensagem["role"] == "assistant" and (
+            mensagem.get("execucao_id") == execucao_id
+            or (texto_anterior and mensagem.get("content") == texto_anterior)
+        ):
+            mensagem["execucao_id"] = execucao_id
+            mensagem["content"] = texto_resultado(resultado)
+
+
 def _post(path: str, payload: dict, token: str = ""):
     if MODO_DEMO:
         if path == "/agent/chat" and not chave_configurada:
@@ -109,30 +133,53 @@ def _post(path: str, payload: dict, token: str = ""):
             LOGGER.error("Demo: falha inesperada (%s).", type(exc).__name__)
             st.error("Falha inesperada na demonstração. Consulte os logs em Manage app.")
             return None
-        ultimo = st.session_state.ultimo_resultado
-        if ultimo and ultimo.get("execucao_id") == resultado.get("execucao_id"):
-            st.session_state.ultimo_resultado = resultado
-        return resultado
-    try:
-        r = httpx.post(f"{API_URL}{path}", json=payload, headers={"Authorization": f"Bearer {token}"} if token else {}, timeout=20.0)
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:
-        st.error(f"Erro na requisição: {exc}")
-        return None
+    else:
+        try:
+            r = httpx.post(f"{API_URL}{path}", json=payload, headers={"Authorization": f"Bearer {token}"} if token else {}, timeout=20.0)
+            r.raise_for_status()
+            resultado = r.json()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401 and path.startswith("/agent/aprovacoes/"):
+                st.error("Informe um token de aprovador válido cadastrado na API (ACREDITAI_APROVADORES).")
+            else:
+                st.error(f"Erro na requisição: {exc}")
+            return None
+        except Exception as exc:
+            st.error(f"Erro na requisição: {exc}")
+            return None
+
+    if path.endswith("/decidir"):
+        atualizar_resultado(resultado)
+    return resultado
 
 
 pendentes_data = _get("/agent/aprovacoes") or {"pendentes": []}
 qtd_pendentes = len(pendentes_data.get("pendentes", []))
 
 
+def texto_resultado(resultado):
+    status = resultado.get("status")
+    exec_id = resultado.get("execucao_id")
+    if status == "concluido":
+        return f"**Execução `{exec_id}` concluída com sucesso.**"
+    if status == "aguardando_aprovacao":
+        return f"⏳ **Execução `{exec_id}` enviada para aprovação humana.** Acesse a aba **Aprovações**."
+    if status == "aguardando_desambiguacao":
+        return f"⚠️ **Múltiplas empresas encontradas (`{exec_id}`).** Selecione a empresa correta na aba **Aprovações**."
+    return f"🚫 **Operação não executada (`{status}`):** {resultado.get('motivo')}"
+
+
 def render_assistente():
-    altura_paineis = 440
-    col_chat, col_ctx = st.columns([2, 1])
+    ultimo = st.session_state.ultimo_resultado
+    if ultimo and ultimo.get("status") in ("aguardando_aprovacao", "aguardando_desambiguacao"):
+        detalhe = _get(f"/agent/auditoria/{ultimo['execucao_id']}")
+        if detalhe and detalhe.get("resposta"):
+            atualizar_resultado(detalhe["resposta"])
+    col_chat, col_ctx = st.columns([2, 3])
 
     with col_chat:
         st.subheader("Chat Operacional")
-        historico = st.container(height=altura_paineis, key="chat-operacional")
+        historico = st.container(height="stretch", border=True, key="chat-operacional")
         with historico:
             if MODO_DEMO:
                 st.caption(
@@ -140,13 +187,13 @@ def render_assistente():
                     "para a Logística Sul ou consultar o saldo da Horizonte."
                 )
             for msg in st.session_state.messages:
-                with st.chat_message(msg["role"]):
+                with st.chat_message(msg["role"], avatar=AVATARES_CHAT[msg["role"]]):
                     st.markdown(msg["content"])
 
         prompt = st.chat_input("Ex.: Consulte a Logística Sul e adicione 1500 créditos")
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
-            with historico.chat_message("user"):
+            with historico.chat_message("user", avatar=AVATARES_CHAT["user"]):
                 st.markdown(prompt)
 
             res = _post(
@@ -159,27 +206,33 @@ def render_assistente():
             )
             if res:
                 st.session_state.ultimo_resultado = res
-                status = res.get("status")
-                exec_id = res.get("execucao_id")
-                if status == "concluido":
-                    texto = f"**Execução `{exec_id}` concluída com sucesso.**"
-                elif status == "aguardando_aprovacao":
-                    texto = f"⏳ **Execução `{exec_id}` enviada para aprovação humana.** Acesse a aba **Aprovações**."
-                elif status == "aguardando_desambiguacao":
-                    texto = f"⚠️ **Múltiplas empresas encontradas (`{exec_id}`).** Selecione a empresa correta na aba **Aprovações**."
-                else:
-                    texto = f"🚫 **Operação não executada (`{status}`):** {res.get('motivo')}"
-
-                st.session_state.messages.append({"role": "assistant", "content": texto})
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": texto_resultado(res),
+                    "execucao_id": res.get("execucao_id"),
+                })
                 st.rerun()
 
     with col_ctx:
         st.subheader("Painel Contextual")
-        with st.container(height=altura_paineis, key="painel-contextual"):
+        with st.container(height="stretch", border=True, key="painel-contextual"):
             render_contexto(st.session_state.ultimo_resultado)
 
 
 def render_contexto(resultado):
+    geral, etapas, payload = st.tabs(["Geral", "Etapas", "Payload"])
+    with geral:
+        render_visao_geral(resultado)
+    with etapas:
+        render_eventos((resultado or {}).get("auditoria"))
+    with payload:
+        if resultado:
+            st.json(resultado, expanded=1)
+        else:
+            st.info("O JSON da resposta aparecerá após a primeira solicitação.")
+
+
+def render_visao_geral(resultado):
     if not resultado:
         st.info("Envie uma solicitação no chat para visualizar os dados da conta e o impacto previsto.")
         return
@@ -211,21 +264,22 @@ def render_contexto(resultado):
 
     saldo_anterior = creditos.get("saldo_anterior")
     if solicitados > 0 or incluidos:
+        metricas = []
+        if saldo_anterior is not None:
+            metricas.append(("Saldo anterior", saldo_anterior))
+        metricas.append(("Créditos solicitados", solicitados))
+        saldo_final = creditos.get("saldo_final")
+        if incluidos and saldo_final is not None:
+            metricas.append(("Saldo final", saldo_final))
+        elif status == "aguardando_aprovacao" and saldo_anterior is not None:
+            metricas.append(("Saldo projetado", saldo_anterior + solicitados))
+
         with st.container(border=True):
             st.markdown("**Impacto no saldo**")
-            if saldo_anterior is not None:
-                st.metric("Saldo anterior", saldo_anterior)
-            st.metric("Créditos solicitados", solicitados)
-            saldo_final = creditos.get("saldo_final")
-            if incluidos and saldo_final is not None:
-                st.metric("Saldo final", saldo_final)
-            elif status == "aguardando_aprovacao" and saldo_anterior is not None:
-                st.metric("Saldo projetado", saldo_anterior + solicitados)
+            for coluna, (rotulo, valor) in zip(st.columns(len(metricas)), metricas):
+                coluna.metric(rotulo, valor)
     elif saldo_anterior is not None:
         st.metric("Saldo atual", saldo_anterior)
-
-    with st.expander("Etapas da execução", icon=":material/timeline:"):
-        render_eventos(resultado.get("auditoria"))
 
 
 def render_desfecho(resultado):
@@ -288,7 +342,7 @@ def render_estado_vazio(icone, mensagem):
 
 
 def render_aprovacoes():
-    token_aprovador = "" if MODO_DEMO else st.text_input("Token do aprovador", type="password")
+    token_aprovador = "" if MODO_DEMO else st.text_input("Token do aprovador", type="password").strip()
     st.subheader(f"Centro de Aprovações e Desambiguação ({qtd_pendentes})")
     pendentes = pendentes_data.get("pendentes", [])
     if not pendentes:
