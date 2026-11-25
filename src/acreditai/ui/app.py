@@ -7,6 +7,7 @@ import httpx
 import streamlit as st
 
 API_URL = os.getenv("ACREDITAI_API_URL", "http://localhost:8000")
+MODO_DEMO = os.getenv("ACREDITAI_MODE", "").strip().lower() == "demo"
 ASSETS_DIR = Path(__file__).resolve().parents[3] / "assets"
 
 MARCA_JPEG = b64encode((ASSETS_DIR / "acreditai-brand.jpg").read_bytes()).decode("ascii")
@@ -31,8 +32,29 @@ if "messages" not in st.session_state:
 if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
 
+if MODO_DEMO:
+    from fastapi import HTTPException
+    from acreditai.config import settings
+    from acreditai.ui.demo import Demo
+
+    if "acreditai_demo" not in st.session_state:
+        st.session_state.acreditai_demo = Demo()
+
+
+def reiniciar_demo():
+    st.session_state.acreditai_demo.close()
+    del st.session_state.acreditai_demo
+    st.session_state.messages = []
+    st.session_state.ultimo_resultado = None
+
 
 def _get(path: str):
+    if MODO_DEMO:
+        try:
+            return st.session_state.acreditai_demo.get(path)
+        except HTTPException as exc:
+            st.error(exc.detail)
+            return None
     try:
         r = httpx.get(f"{API_URL}{path}", timeout=10.0)
         r.raise_for_status()
@@ -43,6 +65,22 @@ def _get(path: str):
 
 
 def _post(path: str, payload: dict, token: str = ""):
+    if MODO_DEMO:
+        if path == "/agent/chat" and not settings.openai_api_key:
+            st.error("Configure OPENAI_API_KEY para usar o chat da demonstração.")
+            return None
+        try:
+            resultado = st.session_state.acreditai_demo.post(path, payload)
+        except HTTPException as exc:
+            st.error(exc.detail)
+            return None
+        except Exception:
+            st.error("Não foi possível executar a solicitação de demonstração.")
+            return None
+        ultimo = st.session_state.ultimo_resultado
+        if ultimo and ultimo.get("execucao_id") == resultado.get("execucao_id"):
+            st.session_state.ultimo_resultado = resultado
+        return resultado
     try:
         r = httpx.post(f"{API_URL}{path}", json=payload, headers={"Authorization": f"Bearer {token}"} if token else {}, timeout=20.0)
         r.raise_for_status()
@@ -61,6 +99,11 @@ def render_assistente():
 
     with col_chat:
         st.subheader("Chat Operacional")
+        if MODO_DEMO:
+            st.caption(
+                "Experimente consultar o saldo da Logística Sul, pedir 1500 créditos "
+                "para a Logística Sul ou consultar o saldo da Horizonte."
+            )
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -209,7 +252,7 @@ def render_estado_vazio(icone, mensagem):
 
 
 def render_aprovacoes():
-    token_aprovador = st.text_input("Token do aprovador", type="password")
+    token_aprovador = "" if MODO_DEMO else st.text_input("Token do aprovador", type="password")
     st.subheader(f"Centro de Aprovações e Desambiguação ({qtd_pendentes})")
     pendentes = pendentes_data.get("pendentes", [])
     if not pendentes:
@@ -312,6 +355,9 @@ with st.sidebar:
         </h1>
         """
     )
+    if MODO_DEMO:
+        st.caption("Modo demonstração · Dados fictícios")
+        st.button("Reiniciar demonstração", on_click=reiniciar_demo)
     for destino in paginas:
         if destino == pagina:
             with st.container(key="sidebar-nav-active"):

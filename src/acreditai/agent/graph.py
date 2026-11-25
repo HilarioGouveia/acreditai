@@ -34,14 +34,19 @@ def _rotear_pos_validacao(state: AgentState) -> str:
     return "incluir_creditos"
 
 
-def build_graph():
+def build_graph(
+    *,
+    buscar=buscar_empresa_node,
+    consultar=consultar_assinatura_node,
+    incluir=incluir_creditos_node,
+):
     workflow = StateGraph(AgentState)
 
     workflow.add_node("interpretar", interpretar_solicitacao)
-    workflow.add_node("buscar_empresa", buscar_empresa_node)
-    workflow.add_node("consultar_assinatura", consultar_assinatura_node)
+    workflow.add_node("buscar_empresa", buscar)
+    workflow.add_node("consultar_assinatura", consultar)
     workflow.add_node("validar_regras", validar_regras_node)
-    workflow.add_node("incluir_creditos", incluir_creditos_node)
+    workflow.add_node("incluir_creditos", incluir)
     workflow.add_node("montar_resposta", montar_resposta)
 
     workflow.add_edge(START, "interpretar")
