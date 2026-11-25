@@ -89,14 +89,14 @@ def interpretar_solicitacao(state: AgentState) -> dict:
     }
 
 
-def buscar_empresa_node(state: AgentState) -> dict:
+def buscar_empresa_node(state: AgentState, *, buscar=buscar_empresa.invoke) -> dict:
     if _checar_limite_iteracoes(state):
         return {"status_operacao": "erro", "motivo": "Limite máximo de iterações atingido."}
 
     iteracoes = state.get("iteracoes", 0) + 1
 
     nome = state.get("empresa_nome") or ""
-    resp = buscar_empresa.invoke({"nome": nome})
+    resp = buscar({"nome": nome})
 
     if not resp.get("ok"):
         motivo = resp.get("erro", "Erro ao consultar empresa.")
@@ -155,13 +155,13 @@ def buscar_empresa_node(state: AgentState) -> dict:
     }
 
 
-def consultar_assinatura_node(state: AgentState) -> dict:
+def consultar_assinatura_node(state: AgentState, *, consultar=consultar_assinatura.invoke) -> dict:
     if _checar_limite_iteracoes(state):
         return {"status_operacao": "erro", "motivo": "Limite máximo de iterações atingido."}
 
     iteracoes = state.get("iteracoes", 0) + 1
     emp_id = state["empresa_id"]
-    resp = consultar_assinatura.invoke({"empresa_id": emp_id})
+    resp = consultar({"empresa_id": emp_id})
 
     if not resp.get("ok") or not resp.get("assinatura"):
         motivo = resp.get("erro", "Assinatura não encontrada para a empresa.")
@@ -264,7 +264,7 @@ def validar_regras_node(state: AgentState) -> dict:
     }
 
 
-def incluir_creditos_node(state: AgentState) -> dict:
+def incluir_creditos_node(state: AgentState, *, incluir=incluir_creditos.invoke) -> dict:
     if _checar_limite_iteracoes(state):
         return {"status_operacao": "erro", "motivo": "Limite máximo de iterações atingido."}
 
@@ -272,7 +272,7 @@ def incluir_creditos_node(state: AgentState) -> dict:
     ass_id = state["assinatura_id"]
     qtd = state["creditos_solicitados"]
 
-    resp = incluir_creditos.invoke({
+    resp = incluir({
         "assinatura_id": ass_id,
         "quantidade": qtd,
         "motivo": f"Solicitação de créditos CS, execução {state['execucao_id']}",

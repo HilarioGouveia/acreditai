@@ -47,6 +47,32 @@ Para chamar `POST /agent/aprovacoes/{execucao_id}/decidir` diretamente, envie
 `Authorization: Bearer <token-secreto>`. O nome na auditoria vem da credencial.
 Use HTTPS se expuser os serviços fora do ambiente local.
 
+## Demonstração em um único deploy
+
+O modo demo executa o LangGraph no Streamlit e usa a OpenAI para interpretar
+as solicitações. Empresas, assinaturas, saldos e registros de execução são
+fictícios e isolados por sessão. O visitante pode decidir as aprovações da sua
+sessão e usar **Reiniciar demonstração** para restaurar os dados iniciais.
+
+No Streamlit Community Cloud, selecione a branch publicada e use
+`src/acreditai/ui/app.py` como arquivo principal. Configure os Secrets:
+
+```toml
+ACREDITAI_MODE = "demo"
+OPENAI_API_KEY = "sua-chave"
+```
+
+Para testar localmente no PowerShell, configure a chave no `.env` ou no ambiente:
+
+```powershell
+$env:ACREDITAI_MODE = 'demo'
+uv run streamlit run src/acreditai/ui/app.py
+```
+
+Experimente **Consulte o saldo da Logística Sul**, **Adicione 1500 créditos para a
+Logística Sul** ou **Consulte o saldo da Horizonte**. Cada mensagem do chat usa
+a chave OpenAI do deploy. O FastAPI e a API SaaS são necessários no modo integrado.
+
 ## Evidências dos três cenários
 
 A API do agente foi exercitada com FastAPI TestClient e interpretação do LLM
