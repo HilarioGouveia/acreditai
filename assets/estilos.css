@@ -49,21 +49,48 @@ header[data-testid="stHeader"] {
     background: transparent;
 }
 
-/* A tela do Assistente mantém os títulos e as áreas de rolagem na mesma linha. */
+/* A altura da coluna do chat acompanha o histórico e o campo de mensagem. */
 [data-testid="stMainBlockContainer"]:has(.st-key-chat-operacional) {
-    --altura-paineis-assistente: max(16rem, calc(100dvh - 13rem));
     padding-block: 3.5rem 1.25rem;
     padding-inline: clamp(1rem, 3vw, 3rem);
 }
 
-[data-testid="stMainBlockContainer"] :is(.st-key-chat-operacional, .st-key-painel-contextual) {
-    height: var(--altura-paineis-assistente);
+:is(.st-key-chat-operacional, .st-key-painel-contextual) {
+    height: max(16rem, calc(100dvh - 13rem)) !important;
     min-height: 0;
+    overflow: auto;
+}
+
+.st-key-chat-operacional {
+    flex: 0 0 auto !important;
+}
+
+@media (min-width: 769px) {
+    [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] .st-key-chat-operacional) {
+        align-items: stretch;
+    }
+
+    [data-testid="stColumn"]:has(.st-key-painel-contextual),
+    [data-testid="stColumn"] :is([data-testid="stVerticalBlock"], [data-testid="stLayoutWrapper"]):has(.st-key-painel-contextual) {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+
+    [data-testid="stColumn"] :is([data-testid="stVerticalBlock"], [data-testid="stLayoutWrapper"]):has(.st-key-painel-contextual),
+    [data-testid="stColumn"] .st-key-painel-contextual {
+        flex: 1 1 0;
+        height: 0;
+    }
+
+    [data-testid="stMainBlockContainer"] [data-testid="stColumn"] .st-key-painel-contextual {
+        height: 0 !important;
+    }
 }
 
 @media (max-width: 768px) {
-    [data-testid="stMainBlockContainer"]:has(.st-key-chat-operacional) {
-        --altura-paineis-assistente: clamp(15rem, 42dvh, 28rem);
+    :is(.st-key-chat-operacional, .st-key-painel-contextual) {
+        height: clamp(15rem, 42dvh, 28rem) !important;
     }
 }
 
