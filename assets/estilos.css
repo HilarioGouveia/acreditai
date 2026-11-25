@@ -49,6 +49,24 @@ header[data-testid="stHeader"] {
     background: transparent;
 }
 
+/* A tela do Assistente mantém os títulos e as áreas de rolagem na mesma linha. */
+[data-testid="stMainBlockContainer"]:has(.st-key-chat-operacional) {
+    --altura-paineis-assistente: max(16rem, calc(100dvh - 13rem));
+    padding-block: 3.5rem 1.25rem;
+    padding-inline: clamp(1rem, 3vw, 3rem);
+}
+
+[data-testid="stMainBlockContainer"] :is(.st-key-chat-operacional, .st-key-painel-contextual) {
+    height: var(--altura-paineis-assistente);
+    min-height: 0;
+}
+
+@media (max-width: 768px) {
+    [data-testid="stMainBlockContainer"]:has(.st-key-chat-operacional) {
+        --altura-paineis-assistente: clamp(15rem, 42dvh, 28rem);
+    }
+}
+
 /* Sidebar */
 
 section[data-testid="stSidebar"] {

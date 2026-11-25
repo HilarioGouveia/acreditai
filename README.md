@@ -49,7 +49,7 @@ Use HTTPS se expuser os serviços fora do ambiente local.
 
 ## Demonstração em um único deploy
 
-O modo demo executa o LangGraph no Streamlit e usa a OpenAI para interpretar
+O modo demo executa o LangGraph no Streamlit e usa OpenAI ou Groq para interpretar
 as solicitações. Empresas, assinaturas, saldos e registros de execução são
 fictícios e isolados por sessão. O visitante pode decidir as aprovações da sua
 sessão e usar **Reiniciar demonstração** para restaurar os dados iniciais.
@@ -62,6 +62,17 @@ ACREDITAI_MODE = "demo"
 OPENAI_API_KEY = "sua-chave"
 ```
 
+Para usar Groq no lugar da OpenAI, configure estes valores nos Secrets do deploy
+ou no `.env` local. O modelo padrão do Groq é `openai/gpt-oss-20b`.
+
+```toml
+ACREDITAI_LLM_PROVIDER = "groq"
+GROQ_API_KEY = "sua-chave-groq"
+```
+
+O valor opcional `GROQ_MODEL` permite selecionar outro modelo com suporte a
+chamadas de ferramentas. O provedor padrão é `openai`.
+
 Para testar localmente no PowerShell, configure a chave no `.env` ou no ambiente:
 
 ```powershell
@@ -71,7 +82,7 @@ uv run streamlit run src/acreditai/ui/app.py
 
 Experimente **Consulte o saldo da Logística Sul**, **Adicione 1500 créditos para a
 Logística Sul** ou **Consulte o saldo da Horizonte**. Cada mensagem do chat usa
-a chave OpenAI do deploy. O FastAPI e a API SaaS são necessários no modo integrado.
+a chave do provedor configurado. O FastAPI e a API SaaS são necessários no modo integrado.
 
 ## Evidências dos três cenários
 
