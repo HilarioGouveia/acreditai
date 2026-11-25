@@ -1,51 +1,152 @@
 # AcreditAi — Copiloto Operacional de Créditos B2B
 
-Agente de IA orquestrado com **LangChain** e **LangGraph**, exposto via **FastAPI** e interface operacional em **Streamlit**, com suporte a **Human-in-the-Loop (HITL)** e trilha de auditoria.
+AcreditAi é um copiloto operacional de Customer Success B2B, implementado como um agente de IA com LangChain e LangGraph para consultar assinaturas e conceder créditos de API sob regras de negócio e com opção de supervisão humana.
 
-## Como executar com `uv`
+Os detalhes da arquitetura, das regras de negócio, dos contratos da API e da interface estão na [Especificação de Design de Software (SDD)](sdd-acreditai.md).
 
-1. Instale as dependências e crie o ambiente virtual:
-```bash
+
+## Arquitetura do Sistema
+
+```text
++-------------------------------------------------------------------+
+|                     Analista de CS / Supervisor                   |
++---------------------------------+---------------------------------+
+                                  |
+                 +----------------+----------------+
+                 |                                 |
+                 v                                 v
++---------------------------------+   +-----------------------------+
+| Interface Web (Streamlit)       |   | Clientes REST / Swagger     |
+| - Chat Operacional + Contexto   |   | - POST /agent/chat          |
+| - Centro de Aprovações (HITL)   |   | - GET  /agent/aprovacoes    |
+| - Desambiguação Interativa      |   | - POST /agent/aprovacoes/id |
+| - Histórico e Trilha Auditoria  |   | - GET  /agent/auditoria     |
++----------------+----------------+   +--------------+--------------+
+                 |                                   |
+                 +-----------------+-----------------+
+                                   |
+                                   v
++-------------------------------------------------------------------+
+|                    FastAPI Agent Service (acreditai)              |
++----------------------------------+--------------------------------+
+                                   |
+                                   v
++-------------------------------------------------------------------+
+|               LangGraph Orchestrator (StateGraph)                 |
+|  [Interpretar] -> [Buscar Empresa] -> [Validar / Desambiguar]     |
+|        -> [Consultar Assinatura] -> [Validar Regras]              |
+|        -> [Gate HITL / Interrupt] -> [Incluir Créditos] -> [END]  |
++--------+-------------------------+-----------------------+--------+
+         |                         |                       |
+         v                         v                       v
+  buscar_empresa         consultar_assinatura      incluir_creditos
+         |                         |                       |
+         +-------------------------+-----------------------+
+                                   | HTTP (httpx + Pydantic)
+                                   v
++-------------------------------------------------------------------+
+|               SaaS API Base (FastAPI + PostgreSQL)                |
+|  GET /empresas?nome= | GET /assinaturas/{id} | POST .../creditos  |
++-------------------------------------------------------------------+
+```
+
+## Fluxo no LangGraph
+
+O analista usa o Streamlit ou chama o FastAPI diretamente. O LangChain extrai
+intenção e parâmetros com saída Pydantic. O `StateGraph` mantém um `AgentState`
+tipado com mensagem, intenção, empresa e assinatura, quantidade, saldo,
+contador de passos, status e trilha de auditoria.
+
+```mermaid
+flowchart TD
+    A["POST /agent/chat"] --> I["Interpretar solicitação"]
+    I -->|Pedido permitido| B["Buscar empresa"]
+    I -->|Fora de escopo ou entrada inválida| R["Montar resposta"]
+    B -->|Empresa identificada| C["Consultar assinatura"]
+    B -->|Falha, ausência ou ambiguidade| R
+    C -->|Consulta simples ou erro| R
+    C -->|Pedido de créditos com assinatura identificada| V["Validar regras"]
+    V -->|Bloqueio ou aprovação pendente| R
+    V -->|Execução direta liberada| D["Incluir créditos"]
+    D --> R
+    R --> E["END · JSON e auditoria"]
+```
+
+| Ferramenta LangChain | Rota do SaaS | Responsabilidade |
+| --- | --- | --- |
+| `buscar_empresa` | `GET /empresas?nome=...` | Localizar empresas pelo nome fantasia. |
+| `consultar_assinatura` | `GET /assinaturas/{empresa_id}` | Obter plano, status e saldo vigente. |
+| `incluir_creditos` | `POST /assinaturas/{assinatura_id}/creditos` | Enviar quantidade e justificativa e ler o saldo devolvido pelo SaaS. |
+
+A API do agente expõe `POST /agent/chat`, `GET /agent/aprovacoes`,
+`POST /agent/aprovacoes/{execucao_id}/decidir`, `GET /agent/historico` e
+`GET /agent/auditoria/{execucao_id}`. As pendências e o histórico ficam em
+SQLite. A decisão autenticada retoma a execução pela API. Se selecionar a
+empresa ainda deixar uma aprovação obrigatória, a concessão continua pendente.
+
+## Limites e riscos
+
+- O agente consulta empresas e assinaturas e concede créditos. Mudança de plano,
+  cancelamento, exclusão ou edição cadastral e estorno ficam fora do escopo.
+  A credencial do agente também tem acesso limitado a essas três operações no SaaS.
+- A concessão exige assinatura ativa e quantidade inteira entre **1 e 3.000**
+  por operação. O código valida essas regras antes do POST, inclusive quando
+  o texto pede para ignorá-las. O grafo tem limite de 10 passos por padrão.
+- Uma busca sem resultados encerra com motivo. Várias empresas exigem seleção
+  entre as candidatas. Várias assinaturas para a empresa interrompem a concessão
+  até que seja possível identificar a assinatura com segurança.
+- Falhas HTTP, timeout e resposta fora do contrato retornam erro estruturado.
+  Após um timeout no POST, consulte o saldo e a auditoria antes de repetir a
+  solicitação, pois o SaaS pode ter registrado o crédito.
+
+## Instalação e execução local
+
+Pré-requisitos: Docker com Compose, Python 3.11+ e `uv`. Os comandos abaixo
+são para PowerShell com os dois repositórios em `D:/Projects`.
+
+### 1. Subir a API SaaS e o PostgreSQL
+
+```powershell
+Set-Location D:/Projects/api-saas
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+Defina um valor secreto em `SAAS_API_TOKEN` no `.env` do SaaS. Para acessar
+rotas administrativas, use um `SAAS_ADMIN_TOKEN` distinto.
+
+```powershell
+docker compose up -d --build
+docker compose ps
+Invoke-RestMethod http://127.0.0.1:8002/health
+```
+
+A API responde na porta `8002` e executa as migrações ao iniciar.
+
+### 2. Configurar e iniciar o agente
+
+```powershell
+Set-Location D:/Projects/acreditai
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 uv sync
 ```
 
-2. Configure o arquivo `.env`:
-```bash
-cp .env.example .env
+No `.env` do agente, informe `OPENAI_API_KEY`, configure
+`SAAS_API_URL=http://127.0.0.1:8002` e use o mesmo `SAAS_API_TOKEN` do SaaS.
+Para aprovações, configure um token por supervisor em
+`ACREDITAI_APROVADORES='{"Supervisor CS":"<token-secreto>"}'`. O nome da
+auditoria vem da credencial fornecida como Bearer token.
+
+```powershell
+uv run uvicorn acreditai.api.main:app --host 127.0.0.1 --port 8010
 ```
 
-3. Inicie a API do Agente (FastAPI):
-```bash
-uv run uvicorn acreditai.api.main:app --reload --port 8000
-```
+Abra o Swagger em `http://127.0.0.1:8010/docs`. Para usar o Streamlit,
+abra outro terminal na raiz do AcreditAi.
 
-4. Em outro terminal, inicie a interface Copiloto (Streamlit):
-```bash
+```powershell
+$env:ACREDITAI_API_URL = 'http://127.0.0.1:8010'
 uv run streamlit run src/acreditai/ui/app.py
 ```
-
-5. Execute os testes automatizados:
-```bash
-uv run pytest -v
-```
-
-## Integração local com a API SaaS
-
-Configure o mesmo `SAAS_API_TOKEN` no Compose da API SaaS e no `.env` do agente.
-Use `SAAS_API_URL=http://127.0.0.1:8002`. Para rotas administrativas no SaaS,
-configure um `SAAS_ADMIN_TOKEN` distinto. O endpoint `/health` é público.
-
-## Credenciais de aprovação
-
-No `.env` do agente, configure um token secreto distinto por pessoa.
-Use um objeto JSON em `ACREDITAI_APROVADORES`, por exemplo
-`ACREDITAI_APROVADORES='{"Supervisor CS":"<token-secreto>"}'`.
-Reinicie a API do agente após editar o arquivo.
-
-No Streamlit, o supervisor informa seu token na área de Aprovações.
-Para chamar `POST /agent/aprovacoes/{execucao_id}/decidir` diretamente, envie
-`Authorization: Bearer <token-secreto>`. O nome na auditoria vem da credencial.
-Use HTTPS se expuser os serviços fora do ambiente local.
 
 ## Demonstração em um único deploy
 
@@ -84,6 +185,9 @@ Experimente **Consulte o saldo da Logística Sul**, **Adicione 1500 créditos pa
 Logística Sul** ou **Consulte o saldo da Horizonte**. Cada mensagem do chat usa
 a chave do provedor configurado. O FastAPI e a API SaaS são necessários no modo integrado.
 
+Informe o token de supervisor na área de Aprovações. Execute a suíte local
+com `uv run pytest -v`.
+
 ## Evidências dos três cenários
 
 A API do agente foi exercitada com FastAPI TestClient e interpretação do LLM
@@ -91,6 +195,12 @@ simulada. As chamadas do cliente SaaS foram reais, com PostgreSQL 17 via Docker.
 No cenário nominal, uma consulta antes e outra após o POST confirmaram o
 incremento persistido de 1.500 créditos. Os JSONs abaixo foram capturados na
 execução de verificação.
+
+Para reproduzir no Swagger, abra `http://127.0.0.1:8010/docs`, expanda
+`POST /agent/chat`, selecione **Try it out**, cole cada requisição abaixo e
+clique em **Execute**. No Postman, envie as mesmas requisições para
+`http://127.0.0.1:8010/agent/chat` com `Content-Type: application/json`.
+O cenário nominal altera o saldo do banco de desenvolvimento a cada execução.
 
 ### 1. Fluxo nominal
 
