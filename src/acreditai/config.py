@@ -1,9 +1,14 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    acreditai_llm_provider: Literal["openai", "groq"] = "openai"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
+    groq_api_key: str = ""
+    groq_model: str = "openai/gpt-oss-20b"
     saas_api_url: str = "http://127.0.0.1:8002"
     saas_api_token: str = ""
     acreditai_aprovadores: dict[str, str] = {}

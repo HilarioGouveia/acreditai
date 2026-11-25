@@ -1,3 +1,4 @@
+import logging
 import os
 from base64 import b64encode
 from html import escape
@@ -8,6 +9,7 @@ import streamlit as st
 
 API_URL = os.getenv("ACREDITAI_API_URL", "http://localhost:8000")
 MODO_DEMO = os.getenv("ACREDITAI_MODE", "").strip().lower() == "demo"
+LOGGER = logging.getLogger("acreditai.demo")
 ASSETS_DIR = Path(__file__).resolve().parents[3] / "assets"
 
 MARCA_JPEG = b64encode((ASSETS_DIR / "acreditai-brand.jpg").read_bytes()).decode("ascii")
@@ -34,8 +36,15 @@ if "ultimo_resultado" not in st.session_state:
 
 if MODO_DEMO:
     from fastapi import HTTPException
+    from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
+    from pydantic import ValidationError
     from acreditai.config import settings
     from acreditai.ui.demo import Demo
+
+    provedor_groq = settings.acreditai_llm_provider == "groq"
+    nome_provedor = "Groq" if provedor_groq else "OpenAI"
+    variavel_chave = "GROQ_API_KEY" if provedor_groq else "OPENAI_API_KEY"
+    chave_configurada = bool(settings.groq_api_key if provedor_groq else settings.openai_api_key)
 
     if "acreditai_demo" not in st.session_state:
         st.session_state.acreditai_demo = Demo()
@@ -66,16 +75,39 @@ def _get(path: str):
 
 def _post(path: str, payload: dict, token: str = ""):
     if MODO_DEMO:
-        if path == "/agent/chat" and not settings.openai_api_key:
-            st.error("Configure OPENAI_API_KEY para usar o chat da demonstração.")
+        if path == "/agent/chat" and not chave_configurada:
+            st.error(f"Configure {variavel_chave} para usar o chat da demonstração.")
             return None
         try:
             resultado = st.session_state.acreditai_demo.post(path, payload)
         except HTTPException as exc:
             st.error(exc.detail)
             return None
-        except Exception:
-            st.error("Não foi possível executar a solicitação de demonstração.")
+        except ValidationError:
+            st.error("Confira o texto da solicitação e o nome do analista.")
+            return None
+        except AuthenticationError:
+            LOGGER.warning("Demo: autenticação recusada por %s (HTTP 401).", nome_provedor)
+            st.error(f"{nome_provedor} recusou a credencial. Confira {variavel_chave}.")
+            return None
+        except RateLimitError as exc:
+            LOGGER.warning("Demo: limite ou cota de %s (HTTP 429).", nome_provedor)
+            if exc.code == "credit_balance_exhausted":
+                st.error(f"O saldo de créditos da conta {nome_provedor} acabou.")
+            else:
+                st.error(f"{nome_provedor} retornou um limite de uso ou de cota. Confira a conta da chave.")
+            return None
+        except APIConnectionError as exc:
+            LOGGER.warning("Demo: falha de conexão com %s (%s).", nome_provedor, type(exc).__name__)
+            st.error(f"O app não conseguiu se conectar a {nome_provedor}. Tente novamente.")
+            return None
+        except APIStatusError as exc:
+            LOGGER.warning("Demo: %s retornou HTTP %s (%s).", nome_provedor, exc.status_code, type(exc).__name__)
+            st.error(f"{nome_provedor} devolveu HTTP {exc.status_code}. Confira o acesso ao modelo configurado.")
+            return None
+        except Exception as exc:
+            LOGGER.error("Demo: falha inesperada (%s).", type(exc).__name__)
+            st.error("Falha inesperada na demonstração. Consulte os logs em Manage app.")
             return None
         ultimo = st.session_state.ultimo_resultado
         if ultimo and ultimo.get("execucao_id") == resultado.get("execucao_id"):
@@ -95,23 +127,26 @@ qtd_pendentes = len(pendentes_data.get("pendentes", []))
 
 
 def render_assistente():
+    altura_paineis = 440
     col_chat, col_ctx = st.columns([2, 1])
 
     with col_chat:
         st.subheader("Chat Operacional")
-        if MODO_DEMO:
-            st.caption(
-                "Experimente consultar o saldo da Logística Sul, pedir 1500 créditos "
-                "para a Logística Sul ou consultar o saldo da Horizonte."
-            )
-        for msg in st.session_state.messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+        historico = st.container(height=altura_paineis, key="chat-operacional")
+        with historico:
+            if MODO_DEMO:
+                st.caption(
+                    "Experimente consultar o saldo da Logística Sul, pedir 1500 créditos "
+                    "para a Logística Sul ou consultar o saldo da Horizonte."
+                )
+            for msg in st.session_state.messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
         prompt = st.chat_input("Ex.: Consulte a Logística Sul e adicione 1500 créditos")
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
+            with historico.chat_message("user"):
                 st.markdown(prompt)
 
             res = _post(
@@ -140,7 +175,8 @@ def render_assistente():
 
     with col_ctx:
         st.subheader("Painel Contextual")
-        render_contexto(st.session_state.ultimo_resultado)
+        with st.container(height=altura_paineis, key="painel-contextual"):
+            render_contexto(st.session_state.ultimo_resultado)
 
 
 def render_contexto(resultado):
@@ -356,7 +392,7 @@ with st.sidebar:
         """
     )
     if MODO_DEMO:
-        st.caption("Modo demonstração · Dados fictícios")
+        st.caption(f"Modo demonstração · Dados fictícios · {nome_provedor}")
         st.button("Reiniciar demonstração", on_click=reiniciar_demo)
     for destino in paginas:
         if destino == pagina:

@@ -40,11 +40,19 @@ def interpretar_solicitacao(state: AgentState) -> dict:
     iteracoes = state.get("iteracoes", 0) + 1
     ultima_msg = state["messages"][-1].content if state.get("messages") else ""
 
-    llm = ChatOpenAI(
-        model=settings.openai_model,
-        api_key=settings.openai_api_key,
-        temperature=0,
-    ).with_structured_output(InterpretacaoOutput)
+    if settings.acreditai_llm_provider == "groq":
+        llm = ChatOpenAI(
+            model=settings.groq_model,
+            api_key=settings.groq_api_key,
+            base_url="https://api.groq.com/openai/v1",
+            temperature=0,
+        ).with_structured_output(InterpretacaoOutput, method="function_calling")
+    else:
+        llm = ChatOpenAI(
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=0,
+        ).with_structured_output(InterpretacaoOutput)
 
     resultado: InterpretacaoOutput = llm.invoke(
         [
